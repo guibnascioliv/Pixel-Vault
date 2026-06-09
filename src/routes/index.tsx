@@ -306,7 +306,7 @@ function Index() {
 
       {/* JOGOS */}
       <Section id="jogos" title="Jogos em Destaque" subtitle="Os títulos mais quentes do momento">
-        <Carousel>
+        <Carousel label="Jogos em destaque">
           {games.map((g) => (
             <ProductCard key={g.id} product={g} onAdd={addToCart} />
           ))}
@@ -315,7 +315,7 @@ function Index() {
 
       {/* CONSOLES */}
       <Section id="consoles" title="Consoles" subtitle="A nova geração na sua sala">
-        <Carousel>
+        <Carousel label="Consoles">
           {consoles.map((c) => (
             <ProductCard key={c.id} product={c} onAdd={addToCart} />
           ))}
@@ -324,7 +324,7 @@ function Index() {
 
       {/* OFERTAS */}
       <Section id="ofertas" title="Ofertas" subtitle="Promoções por tempo limitado 🔥">
-        <Carousel>
+        <Carousel label="Ofertas">
           {[...games, ...consoles]
             .filter((p) => p.oldPrice)
             .map((p) => (
