@@ -83,6 +83,48 @@ const games: Product[] = [
     image:
       "https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=600&h=400&fit=crop",
   },
+  {
+    id: "g5",
+    name: "Shadow Realm",
+    category: "Terror / Souls-like",
+    price: 219.9,
+    image:
+      "https://images.unsplash.com/photo-1511512578047-dfb367046420?w=600&h=400&fit=crop",
+  },
+  {
+    id: "g6",
+    name: "Pixel Kingdoms",
+    category: "Estratégia",
+    price: 99.9,
+    oldPrice: 149.9,
+    image:
+      "https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=600&h=400&fit=crop",
+  },
+  {
+    id: "g7",
+    name: "Aqua Odyssey",
+    category: "Mundo Aberto",
+    price: 189.9,
+    image:
+      "https://images.unsplash.com/photo-1556438064-2d7646166914?w=600&h=400&fit=crop",
+  },
+  {
+    id: "g8",
+    name: "Mecha Storm IV",
+    category: "Ação",
+    price: 159.9,
+    image:
+      "https://images.unsplash.com/photo-1593305841991-05c297ba4575?w=600&h=400&fit=crop",
+  },
+  {
+    id: "g9",
+    name: "Hyper League",
+    category: "Esportes / MOBA",
+    price: 89.9,
+    oldPrice: 129.9,
+    image:
+      "https://images.unsplash.com/photo-1542751110-97427bbecf20?w=600&h=400&fit=crop",
+  },
 ];
 
 const consoles: Product[] = [
