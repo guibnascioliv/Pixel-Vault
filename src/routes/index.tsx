@@ -12,7 +12,13 @@ import {
   Trash2,
   Plus,
   Minus,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
+import switchImg from "@/assets/console-switch.jpg";
+import vortexImg from "@/assets/console-vortex.jpg";
+import pixeldeckImg from "@/assets/console-pixeldeck.jpg";
+import nebulaImg from "@/assets/console-nebula.jpg";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -150,8 +156,30 @@ const consoles: Product[] = [
     name: "Nintendo Switch OLED",
     category: "Nintendo • 7\"",
     price: 2499.0,
-    image:
-      "https://images.unsplash.com/photo-1606144042614-b2417e99c4e3?w=600&h=400&fit=crop",
+    image: switchImg,
+  },
+  {
+    id: "c4",
+    name: "Vortex One",
+    category: "VortexTech • 2TB",
+    price: 4599.0,
+    oldPrice: 4999.0,
+    image: vortexImg,
+  },
+  {
+    id: "c5",
+    name: "Pixel Deck",
+    category: "Retro Handheld • 512GB",
+    price: 1899.0,
+    image: pixeldeckImg,
+  },
+  {
+    id: "c6",
+    name: "Nebula Cube",
+    category: "Stellar • Cloud Gaming",
+    price: 2999.0,
+    oldPrice: 3499.0,
+    image: nebulaImg,
   },
 ];
 
@@ -275,31 +303,31 @@ function Index() {
 
       {/* JOGOS */}
       <Section id="jogos" title="Jogos em Destaque" subtitle="Os títulos mais quentes do momento">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Carousel>
           {games.map((g) => (
             <ProductCard key={g.id} product={g} onAdd={addToCart} />
           ))}
-        </div>
+        </Carousel>
       </Section>
 
       {/* CONSOLES */}
       <Section id="consoles" title="Consoles" subtitle="A nova geração na sua sala">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Carousel>
           {consoles.map((c) => (
             <ProductCard key={c.id} product={c} onAdd={addToCart} />
           ))}
-        </div>
+        </Carousel>
       </Section>
 
       {/* OFERTAS */}
       <Section id="ofertas" title="Ofertas" subtitle="Promoções por tempo limitado 🔥">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <Carousel>
           {[...games, ...consoles]
             .filter((p) => p.oldPrice)
             .map((p) => (
               <ProductCard key={"o-" + p.id} product={p} onAdd={addToCart} />
             ))}
-        </div>
+        </Carousel>
       </Section>
 
       <footer className="border-t border-emerald-400/15 py-8 text-center text-slate-500 text-sm">
