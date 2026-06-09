@@ -14,6 +14,9 @@ import {
   Minus,
   ChevronLeft,
   ChevronRight,
+  Tag,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 import switchImg from "@/assets/console-switch.jpg";
 import vortexImg from "@/assets/console-vortex.jpg";
@@ -453,50 +456,70 @@ function Section({
   );
 }
 
-function Carousel({ children }: { children: React.ReactNode }) {
+function Carousel({
+  children,
+  label,
+}: {
+  children: React.ReactNode;
+  label: string;
+}) {
   const scrollerRef = useRef<HTMLDivElement>(null);
-  const [atStart, setAtStart] = useState(true);
-  const [atEnd, setAtEnd] = useState(false);
-
-  const updateEdges = () => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    setAtStart(el.scrollLeft <= 4);
-    setAtEnd(el.scrollLeft + el.clientWidth >= el.scrollWidth - 4);
-  };
-
-  useEffect(() => {
-    updateEdges();
-    const el = scrollerRef.current;
-    if (!el) return;
-    el.addEventListener("scroll", updateEdges, { passive: true });
-    window.addEventListener("resize", updateEdges);
-    return () => {
-      el.removeEventListener("scroll", updateEdges);
-      window.removeEventListener("resize", updateEdges);
-    };
-  }, []);
+  const items = Array.isArray(children) ? children : [children];
 
   const scrollBy = (dir: 1 | -1) => {
     const el = scrollerRef.current;
     if (!el) return;
     const card = el.querySelector<HTMLElement>("[data-carousel-item]");
     const step = card ? card.offsetWidth + 24 : el.clientWidth * 0.8;
-    el.scrollBy({ left: dir * step * 1.5, behavior: "smooth" });
+    const maxScroll = el.scrollWidth - el.clientWidth;
+    const next = el.scrollLeft + dir * step * 1.5;
+
+    // Looping: jump to the other end when we go past either edge.
+    if (dir === 1 && el.scrollLeft >= maxScroll - 4) {
+      el.scrollTo({ left: 0, behavior: "smooth" });
+      return;
+    }
+    if (dir === -1 && el.scrollLeft <= 4) {
+      el.scrollTo({ left: maxScroll, behavior: "smooth" });
+      return;
+    }
+    el.scrollTo({
+      left: Math.max(0, Math.min(maxScroll, next)),
+      behavior: "smooth",
+    });
   };
 
-  const items = Array.isArray(children) ? children : [children];
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowRight") {
+      e.preventDefault();
+      scrollBy(1);
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      scrollBy(-1);
+    }
+  };
 
   return (
-    <div className="relative">
+    <div
+      className="relative"
+      role="region"
+      aria-roledescription="carrossel"
+      aria-label={label}
+      onKeyDown={onKeyDown}
+    >
       <div
         ref={scrollerRef}
-        className="flex gap-6 overflow-x-auto snap-x snap-mandatory pb-4 -mx-5 px-5 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        tabIndex={0}
+        className="flex gap-6 overflow-x-auto snap-x snap-mandatory pb-4 -mx-5 px-5 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 rounded-lg"
+        aria-label={`${label} — use as setas do teclado para navegar`}
       >
         {items.map((child, i) => (
           <div
             key={i}
             data-carousel-item
+            role="group"
+            aria-roledescription="slide"
+            aria-label={`Item ${i + 1} de ${items.length}`}
             className="snap-start shrink-0 w-[78%] sm:w-[46%] lg:w-[31%] xl:w-[23%]"
           >
             {child}
@@ -505,21 +528,19 @@ function Carousel({ children }: { children: React.ReactNode }) {
       </div>
       <button
         type="button"
-        aria-label="Anterior"
+        aria-label={`Anterior em ${label}`}
         onClick={() => scrollBy(-1)}
-        disabled={atStart}
-        className="hidden md:flex absolute left-[-18px] top-1/2 -translate-y-1/2 w-11 h-11 rounded-full items-center justify-center bg-black/80 border border-emerald-400/40 text-emerald-400 hover:bg-emerald-400 hover:text-black transition disabled:opacity-30 disabled:cursor-not-allowed shadow-lg shadow-emerald-500/20"
+        className="hidden md:flex absolute left-[-18px] top-1/2 -translate-y-1/2 w-11 h-11 rounded-full items-center justify-center bg-black/80 border border-emerald-400/40 text-emerald-400 hover:bg-emerald-400 hover:text-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 shadow-lg shadow-emerald-500/20"
       >
-        <ChevronLeft className="w-5 h-5" />
+        <ChevronLeft className="w-5 h-5" aria-hidden="true" />
       </button>
       <button
         type="button"
-        aria-label="Próximo"
+        aria-label={`Próximo em ${label}`}
         onClick={() => scrollBy(1)}
-        disabled={atEnd}
-        className="hidden md:flex absolute right-[-18px] top-1/2 -translate-y-1/2 w-11 h-11 rounded-full items-center justify-center bg-black/80 border border-emerald-400/40 text-emerald-400 hover:bg-emerald-400 hover:text-black transition disabled:opacity-30 disabled:cursor-not-allowed shadow-lg shadow-emerald-500/20"
+        className="hidden md:flex absolute right-[-18px] top-1/2 -translate-y-1/2 w-11 h-11 rounded-full items-center justify-center bg-black/80 border border-emerald-400/40 text-emerald-400 hover:bg-emerald-400 hover:text-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 shadow-lg shadow-emerald-500/20"
       >
-        <ChevronRight className="w-5 h-5" />
+        <ChevronRight className="w-5 h-5" aria-hidden="true" />
       </button>
     </div>
   );
