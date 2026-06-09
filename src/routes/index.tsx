@@ -14,6 +14,9 @@ import {
   Minus,
   ChevronLeft,
   ChevronRight,
+  Tag,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 import switchImg from "@/assets/console-switch.jpg";
 import vortexImg from "@/assets/console-vortex.jpg";
@@ -188,11 +191,48 @@ const brl = (n: number) =>
 
 type CartItem = Product & { qty: number };
 
+type Coupon = {
+  code: string;
+  label: string;
+  description: string;
+  percent: number;
+  minTotal?: number;
+};
+
+const COUPONS: Coupon[] = [
+  { code: "PIXEL10", label: "10% OFF", description: "Em todo o site", percent: 10 },
+  {
+    code: "GAMER20",
+    label: "20% OFF",
+    description: "Compras acima de R$ 300",
+    percent: 20,
+    minTotal: 300,
+  },
+  {
+    code: "MEGA30",
+    label: "30% OFF",
+    description: "Compras acima de R$ 1.000",
+    percent: 30,
+    minTotal: 1000,
+  },
+];
+
 function Index() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [purchased, setPurchased] = useState(false);
+  const [coupon, setCoupon] = useState<Coupon | null>(null);
+  const [couponInput, setCouponInput] = useState("");
+  const [couponMsg, setCouponMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(
+    null,
+  );
+  const [toast, setToast] = useState<string | null>(null);
+
+  const showToast = (text: string) => {
+    setToast(text);
+    window.setTimeout(() => setToast(null), 2000);
+  };
 
   const addToCart = (p: Product) => {
     setCart((c) => {
@@ -200,7 +240,7 @@ function Index() {
       if (found) return c.map((i) => (i.id === p.id ? { ...i, qty: i.qty + 1 } : i));
       return [...c, { ...p, qty: 1 }];
     });
-    setCartOpen(true);
+    showToast(`"${p.name}" adicionado ao carrinho`);
   };
   const changeQty = (id: string, delta: number) =>
     setCart((c) =>
@@ -210,8 +250,64 @@ function Index() {
     );
   const removeItem = (id: string) => setCart((c) => c.filter((i) => i.id !== id));
 
-  const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
+
+  // Re-validate coupon when subtotal changes (Nielsen: error prevention)
+  useEffect(() => {
+    if (coupon?.minTotal && subtotal < coupon.minTotal) {
+      setCoupon(null);
+      setCouponMsg({
+        kind: "error",
+        text: `Cupom ${coupon.code} removido: o valor mínimo é ${brl(coupon.minTotal)}.`,
+      });
+    }
+  }, [subtotal, coupon]);
+
+  const discount = coupon ? (subtotal * coupon.percent) / 100 : 0;
+  const total = subtotal - discount;
+
+  const applyCoupon = (raw: string) => {
+    const code = raw.trim().toUpperCase();
+    if (!code) {
+      setCouponMsg({ kind: "error", text: "Digite um cupom para aplicar." });
+      return;
+    }
+    const found = COUPONS.find((c) => c.code === code);
+    if (!found) {
+      setCouponMsg({ kind: "error", text: `Cupom "${code}" inválido.` });
+      return;
+    }
+    if (found.minTotal && subtotal < found.minTotal) {
+      setCouponMsg({
+        kind: "error",
+        text: `O cupom ${found.code} exige subtotal de ${brl(found.minTotal)}.`,
+      });
+      return;
+    }
+    setCoupon(found);
+    setCouponInput("");
+    setCouponMsg({
+      kind: "ok",
+      text: `Cupom ${found.code} aplicado: ${found.percent}% de desconto.`,
+    });
+  };
+
+  const removeCoupon = () => {
+    if (!coupon) return;
+    setCoupon(null);
+    setCouponMsg({ kind: "ok", text: "Cupom removido." });
+  };
+
+  // Close cart with Escape — Nielsen: user control & freedom
+  useEffect(() => {
+    if (!cartOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setCartOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [cartOpen]);
 
   return (
     <div
@@ -244,34 +340,44 @@ function Index() {
         .fade-up { animation: fadeUp .5s ease both; }
       `}</style>
 
+      {/* Skip link — Nielsen: user control / a11y */}
+      <a
+        href="#conteudo"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:bg-emerald-400 focus:text-black focus:px-4 focus:py-2 focus:rounded-full focus:font-semibold"
+      >
+        Pular para o conteúdo
+      </a>
+
       {/* HEADER */}
       <header className="sticky top-0 z-30 backdrop-blur bg-black/40 border-b border-emerald-400/15">
         <div className="max-w-7xl mx-auto px-5 py-4 flex items-center justify-between">
-          <a href="#" className="flex items-center gap-2">
-            <Gamepad2 className="w-7 h-7 neon-green" />
+          <a href="#" className="flex items-center gap-2" aria-label="Pixel Vault — Página inicial">
+            <Gamepad2 className="w-7 h-7 neon-green" aria-hidden="true" />
             <span className="font-display text-xl font-black neon-green">
               PIXEL VAULT
             </span>
           </a>
-          <nav className="hidden md:flex gap-8 text-sm font-semibold uppercase tracking-wider">
-            <a href="#jogos" className="text-emerald-400 hover:text-emerald-300 transition">
+          <nav aria-label="Principal" className="hidden md:flex gap-8 text-sm font-semibold uppercase tracking-wider">
+            <a href="#jogos" className="text-emerald-400 hover:text-emerald-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 rounded transition">
               Jogos
             </a>
-            <a href="#consoles" className="text-emerald-400 hover:text-emerald-300 transition">
+            <a href="#consoles" className="text-emerald-400 hover:text-emerald-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 rounded transition">
               Consoles
             </a>
-            <a href="#ofertas" className="text-emerald-400 hover:text-emerald-300 transition">
+            <a href="#ofertas" className="text-emerald-400 hover:text-emerald-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 rounded transition">
               Ofertas
             </a>
           </nav>
           <button
             onClick={() => setCartOpen(true)}
-            className="relative p-2 rounded-lg hover:bg-emerald-400/10 transition"
-            aria-label="Abrir carrinho"
+            className="relative p-2 rounded-lg hover:bg-emerald-400/10 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 min-h-11 min-w-11"
+            aria-label={`Abrir carrinho${cartCount ? `, ${cartCount} ${cartCount === 1 ? "item" : "itens"}` : ", vazio"}`}
+            aria-haspopup="dialog"
+            aria-expanded={cartOpen}
           >
-            <ShoppingCart className="w-6 h-6 text-emerald-400" />
+            <ShoppingCart className="w-6 h-6 text-emerald-400" aria-hidden="true" />
             {cartCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-emerald-400 text-black text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+              <span aria-hidden="true" className="absolute -top-1 -right-1 bg-emerald-400 text-black text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
                 {cartCount}
               </span>
             )}
@@ -279,60 +385,76 @@ function Index() {
         </div>
       </header>
 
-      {/* HERO */}
-      <section className="grid-bg">
-        <div className="max-w-7xl mx-auto px-5 py-24 text-center fade-up">
-          <p className="text-emerald-400/80 font-semibold tracking-[0.4em] text-xs mb-4">
-            ▸ PRESS START
-          </p>
-          <h1 className="font-display text-5xl md:text-7xl font-black neon-green mb-6">
-            NEXT LEVEL GAMING
-          </h1>
-          <p className="max-w-2xl mx-auto text-slate-300 text-lg mb-8">
-            Os melhores jogos e consoles com preços que cabem no seu bolso. Entrega
-            rápida para todo o Brasil.
-          </p>
-          <a
-            href="#jogos"
-            className="btn-green inline-block px-8 py-3 rounded-full uppercase text-sm tracking-wider"
-          >
-            Ver Catálogo
-          </a>
-        </div>
-      </section>
+      <main id="conteudo">
+        {/* HERO */}
+        <section className="grid-bg" aria-labelledby="hero-title">
+          <div className="max-w-7xl mx-auto px-5 py-24 text-center fade-up">
+            <p className="text-emerald-400/80 font-semibold tracking-[0.4em] text-xs mb-4">
+              ▸ PRESS START
+            </p>
+            <h1 id="hero-title" className="font-display text-5xl md:text-7xl font-black neon-green mb-6">
+              NEXT LEVEL GAMING
+            </h1>
+            <p className="max-w-2xl mx-auto text-slate-300 text-lg mb-8">
+              Os melhores jogos e consoles com preços que cabem no seu bolso. Entrega
+              rápida para todo o Brasil.
+            </p>
+            <a
+              href="#jogos"
+              className="btn-green inline-block px-8 py-3 rounded-full uppercase text-sm tracking-wider focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+            >
+              Ver Catálogo
+            </a>
+          </div>
+        </section>
 
-      {/* JOGOS */}
-      <Section id="jogos" title="Jogos em Destaque" subtitle="Os títulos mais quentes do momento">
-        <Carousel>
-          {games.map((g) => (
-            <ProductCard key={g.id} product={g} onAdd={addToCart} />
-          ))}
-        </Carousel>
-      </Section>
-
-      {/* CONSOLES */}
-      <Section id="consoles" title="Consoles" subtitle="A nova geração na sua sala">
-        <Carousel>
-          {consoles.map((c) => (
-            <ProductCard key={c.id} product={c} onAdd={addToCart} />
-          ))}
-        </Carousel>
-      </Section>
-
-      {/* OFERTAS */}
-      <Section id="ofertas" title="Ofertas" subtitle="Promoções por tempo limitado 🔥">
-        <Carousel>
-          {[...games, ...consoles]
-            .filter((p) => p.oldPrice)
-            .map((p) => (
-              <ProductCard key={"o-" + p.id} product={p} onAdd={addToCart} />
+        {/* JOGOS */}
+        <Section id="jogos" title="Jogos em Destaque" subtitle="Os títulos mais quentes do momento">
+          <Carousel label="Jogos em destaque">
+            {games.map((g) => (
+              <ProductCard key={g.id} product={g} onAdd={addToCart} />
             ))}
-        </Carousel>
-      </Section>
+          </Carousel>
+        </Section>
+
+        {/* CONSOLES */}
+        <Section id="consoles" title="Consoles" subtitle="A nova geração na sua sala">
+          <Carousel label="Consoles">
+            {consoles.map((c) => (
+              <ProductCard key={c.id} product={c} onAdd={addToCart} />
+            ))}
+          </Carousel>
+        </Section>
+
+        {/* OFERTAS */}
+        <Section id="ofertas" title="Ofertas" subtitle="Promoções por tempo limitado 🔥">
+          <Carousel label="Ofertas">
+            {[...games, ...consoles]
+              .filter((p) => p.oldPrice)
+              .map((p) => (
+                <ProductCard key={"o-" + p.id} product={p} onAdd={addToCart} />
+              ))}
+          </Carousel>
+        </Section>
+      </main>
 
       <footer className="border-t border-emerald-400/15 py-8 text-center text-slate-500 text-sm">
         © {new Date().getFullYear()} Pixel Vault Games. Todos os direitos reservados.
       </footer>
+
+      {/* Live region for toasts — Nielsen: visibility of system status */}
+      <div aria-live="polite" aria-atomic="true" className="sr-only">
+        {toast}
+      </div>
+      {toast && (
+        <div
+          role="status"
+          className="fixed bottom-24 right-6 z-50 bg-emerald-400 text-black font-semibold px-4 py-3 rounded-full shadow-lg shadow-emerald-500/30 flex items-center gap-2 fade-up"
+        >
+          <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
+          {toast}
+        </div>
+      )}
 
       {/* CART DRAWER */}
       {cartOpen && (
@@ -340,69 +462,213 @@ function Index() {
           <div
             className="flex-1 bg-black/60 backdrop-blur-sm"
             onClick={() => setCartOpen(false)}
+            aria-hidden="true"
           />
-          <aside className="w-full max-w-md bg-[#0a1410] border-l border-emerald-400/30 flex flex-col">
+          <aside
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cart-title"
+            className="w-full max-w-md bg-[#0a1410] border-l border-emerald-400/30 flex flex-col"
+          >
             <div className="flex items-center justify-between p-5 border-b border-emerald-400/15">
-              <h3 className="font-display text-lg neon-green">Carrinho</h3>
-              <button onClick={() => setCartOpen(false)} aria-label="Fechar">
-                <X className="w-5 h-5 text-slate-300" />
+              <h2 id="cart-title" className="font-display text-lg neon-green">
+                Carrinho {cartCount > 0 && <span className="text-slate-400 text-sm font-normal">({cartCount})</span>}
+              </h2>
+              <button
+                onClick={() => setCartOpen(false)}
+                aria-label="Fechar carrinho"
+                className="p-2 rounded-lg hover:bg-emerald-400/10 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 min-h-11 min-w-11 flex items-center justify-center"
+              >
+                <X className="w-5 h-5 text-slate-300" aria-hidden="true" />
               </button>
             </div>
+
             <div className="flex-1 overflow-y-auto p-5 space-y-3">
               {purchased ? (
-                <div className="text-center py-12">
-                  <Sparkles className="w-12 h-12 neon-green mx-auto mb-3" />
-                  <h4 className="font-display text-xl neon-green">Compra realizada!</h4>
+                <div role="status" className="text-center py-12">
+                  <Sparkles className="w-12 h-12 neon-green mx-auto mb-3" aria-hidden="true" />
+                  <h3 className="font-display text-xl neon-green">Compra realizada!</h3>
                   <p className="text-slate-400 mt-2">Obrigado pela preferência 🎮</p>
                 </div>
               ) : cart.length === 0 ? (
-                <p className="text-slate-400 text-center mt-12">Carrinho vazio</p>
-              ) : (
-                cart.map((i) => (
-                  <div
-                    key={i.id}
-                    className="flex gap-3 p-3 rounded-lg bg-black/40 neon-border"
+                <div className="text-center mt-12">
+                  <ShoppingCart className="w-10 h-10 text-slate-600 mx-auto mb-3" aria-hidden="true" />
+                  <p className="text-slate-400">Seu carrinho está vazio</p>
+                  <button
+                    onClick={() => setCartOpen(false)}
+                    className="mt-4 text-emerald-400 hover:text-emerald-300 text-sm underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 rounded"
                   >
-                    <img
-                      src={i.image}
-                      alt=""
-                      className="w-16 h-16 rounded object-cover"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold truncate">{i.name}</p>
-                      <p className="text-emerald-400 text-sm">{brl(i.price)}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <button
-                          onClick={() => changeQty(i.id, -1)}
-                          className="p-1 rounded bg-emerald-400/10 hover:bg-emerald-400/20"
-                        >
-                          <Minus className="w-3 h-3" />
-                        </button>
-                        <span className="text-sm w-6 text-center">{i.qty}</span>
-                        <button
-                          onClick={() => changeQty(i.id, 1)}
-                          className="p-1 rounded bg-emerald-400/10 hover:bg-emerald-400/20"
-                        >
-                          <Plus className="w-3 h-3" />
-                        </button>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => removeItem(i.id)}
-                      className="text-slate-500 hover:text-red-400"
+                    Continuar comprando
+                  </button>
+                </div>
+              ) : (
+                <ul className="space-y-3" aria-label="Itens do carrinho">
+                  {cart.map((i) => (
+                    <li
+                      key={i.id}
+                      className="flex gap-3 p-3 rounded-lg bg-black/40 neon-border"
                     >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))
+                      <img
+                        src={i.image}
+                        alt=""
+                        className="w-16 h-16 rounded object-cover"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold truncate">{i.name}</p>
+                        <p className="text-emerald-400 text-sm">{brl(i.price)}</p>
+                        <div className="flex items-center gap-2 mt-1" role="group" aria-label={`Quantidade de ${i.name}`}>
+                          <button
+                            onClick={() => changeQty(i.id, -1)}
+                            className="p-2 rounded bg-emerald-400/10 hover:bg-emerald-400/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 min-h-11 min-w-11 flex items-center justify-center"
+                            aria-label={`Diminuir quantidade de ${i.name}`}
+                          >
+                            <Minus className="w-3 h-3" aria-hidden="true" />
+                          </button>
+                          <span className="text-sm w-6 text-center" aria-live="polite" aria-label={`${i.qty} unidades`}>
+                            {i.qty}
+                          </span>
+                          <button
+                            onClick={() => changeQty(i.id, 1)}
+                            className="p-2 rounded bg-emerald-400/10 hover:bg-emerald-400/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 min-h-11 min-w-11 flex items-center justify-center"
+                            aria-label={`Aumentar quantidade de ${i.name}`}
+                          >
+                            <Plus className="w-3 h-3" aria-hidden="true" />
+                          </button>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => removeItem(i.id)}
+                        className="text-slate-500 hover:text-red-400 p-2 self-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 rounded min-h-11 min-w-11 flex items-center justify-center"
+                        aria-label={`Remover ${i.name} do carrinho`}
+                      >
+                        <Trash2 className="w-4 h-4" aria-hidden="true" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {/* DESCONTOS — Nielsen: recognition rather than recall */}
+              {!purchased && cart.length > 0 && (
+                <section
+                  aria-labelledby="coupon-title"
+                  className="mt-6 p-4 rounded-xl bg-black/40 neon-border"
+                >
+                  <h3
+                    id="coupon-title"
+                    className="font-display text-sm neon-green flex items-center gap-2 mb-3"
+                  >
+                    <Tag className="w-4 h-4" aria-hidden="true" /> Cupom de desconto
+                  </h3>
+
+                  {coupon ? (
+                    <div className="flex items-center justify-between bg-emerald-400/10 border border-emerald-400/40 rounded-lg px-3 py-2">
+                      <div>
+                        <p className="text-emerald-300 font-semibold text-sm">
+                          {coupon.code} • {coupon.percent}% OFF
+                        </p>
+                        <p className="text-xs text-slate-400">{coupon.description}</p>
+                      </div>
+                      <button
+                        onClick={removeCoupon}
+                        className="text-xs text-slate-300 hover:text-red-400 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 rounded px-2 py-1"
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  ) : (
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        applyCoupon(couponInput);
+                      }}
+                      className="flex gap-2"
+                    >
+                      <label htmlFor="coupon-input" className="sr-only">
+                        Código do cupom
+                      </label>
+                      <input
+                        id="coupon-input"
+                        type="text"
+                        value={couponInput}
+                        onChange={(e) => setCouponInput(e.target.value)}
+                        placeholder="Digite o cupom"
+                        autoComplete="off"
+                        aria-describedby="coupon-help"
+                        className="flex-1 bg-black/50 border border-emerald-400/20 focus:border-emerald-400/60 focus:outline-none rounded-lg px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 uppercase"
+                      />
+                      <button
+                        type="submit"
+                        className="btn-green px-4 rounded-lg text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+                      >
+                        Aplicar
+                      </button>
+                    </form>
+                  )}
+
+                  {couponMsg && (
+                    <p
+                      role="status"
+                      className={`mt-2 text-xs flex items-center gap-1 ${
+                        couponMsg.kind === "ok" ? "text-emerald-400" : "text-red-400"
+                      }`}
+                    >
+                      {couponMsg.kind === "ok" ? (
+                        <CheckCircle2 className="w-3 h-3" aria-hidden="true" />
+                      ) : (
+                        <AlertCircle className="w-3 h-3" aria-hidden="true" />
+                      )}
+                      {couponMsg.text}
+                    </p>
+                  )}
+
+                  <p id="coupon-help" className="text-[11px] text-slate-500 mt-3 mb-2">
+                    Toque em um cupom para aplicar:
+                  </p>
+                  <ul className="flex flex-wrap gap-2">
+                    {COUPONS.map((c) => {
+                      const eligible = !c.minTotal || subtotal >= c.minTotal;
+                      const active = coupon?.code === c.code;
+                      return (
+                        <li key={c.code}>
+                          <button
+                            type="button"
+                            onClick={() => applyCoupon(c.code)}
+                            disabled={!eligible || active}
+                            aria-label={`Cupom ${c.code}, ${c.label}, ${c.description}${
+                              !eligible ? ", indisponível" : ""
+                            }`}
+                            className="text-xs px-3 py-1.5 rounded-full border border-emerald-400/30 text-emerald-300 hover:bg-emerald-400/15 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 transition"
+                          >
+                            <span className="font-bold">{c.code}</span>{" "}
+                            <span className="text-slate-400">• {c.label}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
               )}
             </div>
+
             {!purchased && (
-              <div className="p-5 border-t border-emerald-400/15">
-                <div className="flex justify-between mb-3">
-                  <span className="text-slate-400">Total</span>
-                  <span className="font-display neon-green">{brl(total)}</span>
-                </div>
+              <div className="p-5 border-t border-emerald-400/15 space-y-2">
+                <dl className="text-sm space-y-1">
+                  <div className="flex justify-between text-slate-400">
+                    <dt>Subtotal</dt>
+                    <dd>{brl(subtotal)}</dd>
+                  </div>
+                  {coupon && (
+                    <div className="flex justify-between text-emerald-400">
+                      <dt>Desconto ({coupon.code})</dt>
+                      <dd>− {brl(discount)}</dd>
+                    </div>
+                  )}
+                  <div className="flex justify-between pt-2 border-t border-emerald-400/10">
+                    <dt className="text-slate-300 font-semibold">Total</dt>
+                    <dd className="font-display neon-green text-lg">{brl(total)}</dd>
+                  </div>
+                </dl>
                 <button
                   disabled={cart.length === 0}
                   onClick={() => {
@@ -410,10 +676,12 @@ function Index() {
                     setTimeout(() => {
                       setPurchased(false);
                       setCart([]);
+                      setCoupon(null);
+                      setCouponMsg(null);
                       setCartOpen(false);
                     }, 2200);
                   }}
-                  className="btn-green w-full py-3 rounded-full disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="btn-green w-full py-3 rounded-full disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 mt-2"
                 >
                   Finalizar Compra
                 </button>
@@ -453,50 +721,70 @@ function Section({
   );
 }
 
-function Carousel({ children }: { children: React.ReactNode }) {
+function Carousel({
+  children,
+  label,
+}: {
+  children: React.ReactNode;
+  label: string;
+}) {
   const scrollerRef = useRef<HTMLDivElement>(null);
-  const [atStart, setAtStart] = useState(true);
-  const [atEnd, setAtEnd] = useState(false);
-
-  const updateEdges = () => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    setAtStart(el.scrollLeft <= 4);
-    setAtEnd(el.scrollLeft + el.clientWidth >= el.scrollWidth - 4);
-  };
-
-  useEffect(() => {
-    updateEdges();
-    const el = scrollerRef.current;
-    if (!el) return;
-    el.addEventListener("scroll", updateEdges, { passive: true });
-    window.addEventListener("resize", updateEdges);
-    return () => {
-      el.removeEventListener("scroll", updateEdges);
-      window.removeEventListener("resize", updateEdges);
-    };
-  }, []);
+  const items = Array.isArray(children) ? children : [children];
 
   const scrollBy = (dir: 1 | -1) => {
     const el = scrollerRef.current;
     if (!el) return;
     const card = el.querySelector<HTMLElement>("[data-carousel-item]");
     const step = card ? card.offsetWidth + 24 : el.clientWidth * 0.8;
-    el.scrollBy({ left: dir * step * 1.5, behavior: "smooth" });
+    const maxScroll = el.scrollWidth - el.clientWidth;
+    const next = el.scrollLeft + dir * step * 1.5;
+
+    // Looping: jump to the other end when we go past either edge.
+    if (dir === 1 && el.scrollLeft >= maxScroll - 4) {
+      el.scrollTo({ left: 0, behavior: "smooth" });
+      return;
+    }
+    if (dir === -1 && el.scrollLeft <= 4) {
+      el.scrollTo({ left: maxScroll, behavior: "smooth" });
+      return;
+    }
+    el.scrollTo({
+      left: Math.max(0, Math.min(maxScroll, next)),
+      behavior: "smooth",
+    });
   };
 
-  const items = Array.isArray(children) ? children : [children];
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowRight") {
+      e.preventDefault();
+      scrollBy(1);
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      scrollBy(-1);
+    }
+  };
 
   return (
-    <div className="relative">
+    <div
+      className="relative"
+      role="region"
+      aria-roledescription="carrossel"
+      aria-label={label}
+      onKeyDown={onKeyDown}
+    >
       <div
         ref={scrollerRef}
-        className="flex gap-6 overflow-x-auto snap-x snap-mandatory pb-4 -mx-5 px-5 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        tabIndex={0}
+        className="flex gap-6 overflow-x-auto snap-x snap-mandatory pb-4 -mx-5 px-5 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 rounded-lg"
+        aria-label={`${label} — use as setas do teclado para navegar`}
       >
         {items.map((child, i) => (
           <div
             key={i}
             data-carousel-item
+            role="group"
+            aria-roledescription="slide"
+            aria-label={`Item ${i + 1} de ${items.length}`}
             className="snap-start shrink-0 w-[78%] sm:w-[46%] lg:w-[31%] xl:w-[23%]"
           >
             {child}
@@ -505,21 +793,19 @@ function Carousel({ children }: { children: React.ReactNode }) {
       </div>
       <button
         type="button"
-        aria-label="Anterior"
+        aria-label={`Anterior em ${label}`}
         onClick={() => scrollBy(-1)}
-        disabled={atStart}
-        className="hidden md:flex absolute left-[-18px] top-1/2 -translate-y-1/2 w-11 h-11 rounded-full items-center justify-center bg-black/80 border border-emerald-400/40 text-emerald-400 hover:bg-emerald-400 hover:text-black transition disabled:opacity-30 disabled:cursor-not-allowed shadow-lg shadow-emerald-500/20"
+        className="hidden md:flex absolute left-[-18px] top-1/2 -translate-y-1/2 w-11 h-11 rounded-full items-center justify-center bg-black/80 border border-emerald-400/40 text-emerald-400 hover:bg-emerald-400 hover:text-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 shadow-lg shadow-emerald-500/20"
       >
-        <ChevronLeft className="w-5 h-5" />
+        <ChevronLeft className="w-5 h-5" aria-hidden="true" />
       </button>
       <button
         type="button"
-        aria-label="Próximo"
+        aria-label={`Próximo em ${label}`}
         onClick={() => scrollBy(1)}
-        disabled={atEnd}
-        className="hidden md:flex absolute right-[-18px] top-1/2 -translate-y-1/2 w-11 h-11 rounded-full items-center justify-center bg-black/80 border border-emerald-400/40 text-emerald-400 hover:bg-emerald-400 hover:text-black transition disabled:opacity-30 disabled:cursor-not-allowed shadow-lg shadow-emerald-500/20"
+        className="hidden md:flex absolute right-[-18px] top-1/2 -translate-y-1/2 w-11 h-11 rounded-full items-center justify-center bg-black/80 border border-emerald-400/40 text-emerald-400 hover:bg-emerald-400 hover:text-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 shadow-lg shadow-emerald-500/20"
       >
-        <ChevronRight className="w-5 h-5" />
+        <ChevronRight className="w-5 h-5" aria-hidden="true" />
       </button>
     </div>
   );
