@@ -453,6 +453,78 @@ function Section({
   );
 }
 
+function Carousel({ children }: { children: React.ReactNode }) {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [atStart, setAtStart] = useState(true);
+  const [atEnd, setAtEnd] = useState(false);
+
+  const updateEdges = () => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    setAtStart(el.scrollLeft <= 4);
+    setAtEnd(el.scrollLeft + el.clientWidth >= el.scrollWidth - 4);
+  };
+
+  useEffect(() => {
+    updateEdges();
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", updateEdges, { passive: true });
+    window.addEventListener("resize", updateEdges);
+    return () => {
+      el.removeEventListener("scroll", updateEdges);
+      window.removeEventListener("resize", updateEdges);
+    };
+  }, []);
+
+  const scrollBy = (dir: 1 | -1) => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const card = el.querySelector<HTMLElement>("[data-carousel-item]");
+    const step = card ? card.offsetWidth + 24 : el.clientWidth * 0.8;
+    el.scrollBy({ left: dir * step * 1.5, behavior: "smooth" });
+  };
+
+  const items = Array.isArray(children) ? children : [children];
+
+  return (
+    <div className="relative">
+      <div
+        ref={scrollerRef}
+        className="flex gap-6 overflow-x-auto snap-x snap-mandatory pb-4 -mx-5 px-5 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {items.map((child, i) => (
+          <div
+            key={i}
+            data-carousel-item
+            className="snap-start shrink-0 w-[78%] sm:w-[46%] lg:w-[31%] xl:w-[23%]"
+          >
+            {child}
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        aria-label="Anterior"
+        onClick={() => scrollBy(-1)}
+        disabled={atStart}
+        className="hidden md:flex absolute left-[-18px] top-1/2 -translate-y-1/2 w-11 h-11 rounded-full items-center justify-center bg-black/80 border border-emerald-400/40 text-emerald-400 hover:bg-emerald-400 hover:text-black transition disabled:opacity-30 disabled:cursor-not-allowed shadow-lg shadow-emerald-500/20"
+      >
+        <ChevronLeft className="w-5 h-5" />
+      </button>
+      <button
+        type="button"
+        aria-label="Próximo"
+        onClick={() => scrollBy(1)}
+        disabled={atEnd}
+        className="hidden md:flex absolute right-[-18px] top-1/2 -translate-y-1/2 w-11 h-11 rounded-full items-center justify-center bg-black/80 border border-emerald-400/40 text-emerald-400 hover:bg-emerald-400 hover:text-black transition disabled:opacity-30 disabled:cursor-not-allowed shadow-lg shadow-emerald-500/20"
+      >
+        <ChevronRight className="w-5 h-5" />
+      </button>
+    </div>
+  );
+}
+
 function ProductCard({
   product,
   onAdd,
