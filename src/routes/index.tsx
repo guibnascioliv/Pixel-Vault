@@ -191,11 +191,48 @@ const brl = (n: number) =>
 
 type CartItem = Product & { qty: number };
 
+type Coupon = {
+  code: string;
+  label: string;
+  description: string;
+  percent: number;
+  minTotal?: number;
+};
+
+const COUPONS: Coupon[] = [
+  { code: "PIXEL10", label: "10% OFF", description: "Em todo o site", percent: 10 },
+  {
+    code: "GAMER20",
+    label: "20% OFF",
+    description: "Compras acima de R$ 300",
+    percent: 20,
+    minTotal: 300,
+  },
+  {
+    code: "MEGA30",
+    label: "30% OFF",
+    description: "Compras acima de R$ 1.000",
+    percent: 30,
+    minTotal: 1000,
+  },
+];
+
 function Index() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [purchased, setPurchased] = useState(false);
+  const [coupon, setCoupon] = useState<Coupon | null>(null);
+  const [couponInput, setCouponInput] = useState("");
+  const [couponMsg, setCouponMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(
+    null,
+  );
+  const [toast, setToast] = useState<string | null>(null);
+
+  const showToast = (text: string) => {
+    setToast(text);
+    window.setTimeout(() => setToast(null), 2000);
+  };
 
   const addToCart = (p: Product) => {
     setCart((c) => {
@@ -203,7 +240,7 @@ function Index() {
       if (found) return c.map((i) => (i.id === p.id ? { ...i, qty: i.qty + 1 } : i));
       return [...c, { ...p, qty: 1 }];
     });
-    setCartOpen(true);
+    showToast(`"${p.name}" adicionado ao carrinho`);
   };
   const changeQty = (id: string, delta: number) =>
     setCart((c) =>
@@ -213,8 +250,64 @@ function Index() {
     );
   const removeItem = (id: string) => setCart((c) => c.filter((i) => i.id !== id));
 
-  const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
+
+  // Re-validate coupon when subtotal changes (Nielsen: error prevention)
+  useEffect(() => {
+    if (coupon?.minTotal && subtotal < coupon.minTotal) {
+      setCoupon(null);
+      setCouponMsg({
+        kind: "error",
+        text: `Cupom ${coupon.code} removido: o valor mínimo é ${brl(coupon.minTotal)}.`,
+      });
+    }
+  }, [subtotal, coupon]);
+
+  const discount = coupon ? (subtotal * coupon.percent) / 100 : 0;
+  const total = subtotal - discount;
+
+  const applyCoupon = (raw: string) => {
+    const code = raw.trim().toUpperCase();
+    if (!code) {
+      setCouponMsg({ kind: "error", text: "Digite um cupom para aplicar." });
+      return;
+    }
+    const found = COUPONS.find((c) => c.code === code);
+    if (!found) {
+      setCouponMsg({ kind: "error", text: `Cupom "${code}" inválido.` });
+      return;
+    }
+    if (found.minTotal && subtotal < found.minTotal) {
+      setCouponMsg({
+        kind: "error",
+        text: `O cupom ${found.code} exige subtotal de ${brl(found.minTotal)}.`,
+      });
+      return;
+    }
+    setCoupon(found);
+    setCouponInput("");
+    setCouponMsg({
+      kind: "ok",
+      text: `Cupom ${found.code} aplicado: ${found.percent}% de desconto.`,
+    });
+  };
+
+  const removeCoupon = () => {
+    if (!coupon) return;
+    setCoupon(null);
+    setCouponMsg({ kind: "ok", text: "Cupom removido." });
+  };
+
+  // Close cart with Escape — Nielsen: user control & freedom
+  useEffect(() => {
+    if (!cartOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setCartOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [cartOpen]);
 
   return (
     <div
