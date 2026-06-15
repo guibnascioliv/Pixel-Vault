@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Gamepad2,
   ShoppingCart,
@@ -368,20 +369,23 @@ function Index() {
               Ofertas
             </a>
           </nav>
-          <button
-            onClick={() => setCartOpen(true)}
-            className="relative p-2 rounded-lg hover:bg-emerald-400/10 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 min-h-11 min-w-11"
-            aria-label={`Abrir carrinho${cartCount ? `, ${cartCount} ${cartCount === 1 ? "item" : "itens"}` : ", vazio"}`}
-            aria-haspopup="dialog"
-            aria-expanded={cartOpen}
-          >
-            <ShoppingCart className="w-6 h-6 text-emerald-400" aria-hidden="true" />
-            {cartCount > 0 && (
-              <span aria-hidden="true" className="absolute -top-1 -right-1 bg-emerald-400 text-black text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                {cartCount}
-              </span>
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            <AuthButton />
+            <button
+              onClick={() => setCartOpen(true)}
+              className="relative p-2 rounded-lg hover:bg-emerald-400/10 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 min-h-11 min-w-11"
+              aria-label={`Abrir carrinho${cartCount ? `, ${cartCount} ${cartCount === 1 ? "item" : "itens"}` : ", vazio"}`}
+              aria-haspopup="dialog"
+              aria-expanded={cartOpen}
+            >
+              <ShoppingCart className="w-6 h-6 text-emerald-400" aria-hidden="true" />
+              {cartCount > 0 && (
+                <span aria-hidden="true" className="absolute -top-1 -right-1 bg-emerald-400 text-black text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                  {cartCount}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
       </header>
 
