@@ -18,6 +18,13 @@ import {
   Tag,
   CheckCircle2,
   AlertCircle,
+  CreditCard,
+  QrCode,
+  Barcode,
+  Truck,
+  MapPin,
+  Lock,
+  ArrowLeft,
 } from "lucide-react";
 import switchImg from "@/assets/console-switch.jpg";
 import vortexImg from "@/assets/console-vortex.jpg";
@@ -190,6 +197,31 @@ const consoles: Product[] = [
 const brl = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+const onlyDigits = (s: string) => s.replace(/\D/g, "");
+const maskCEP = (v: string) => onlyDigits(v).slice(0, 8).replace(/(\d{5})(\d)/, "$1-$2");
+const maskCPF = (v: string) =>
+  onlyDigits(v)
+    .slice(0, 11)
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+const maskPhone = (v: string) => {
+  const d = onlyDigits(v).slice(0, 11);
+  if (d.length <= 10)
+    return d.replace(/(\d{0,2})(\d{0,4})(\d{0,4}).*/, (_, a, b, c) =>
+      [a && `(${a}`, a && a.length === 2 ? ") " : "", b, c && `-${c}`].filter(Boolean).join(""),
+    );
+  return d.replace(/(\d{2})(\d{5})(\d{0,4}).*/, "($1) $2-$3");
+};
+const maskCard = (v: string) =>
+  onlyDigits(v).slice(0, 19).replace(/(\d{4})(?=\d)/g, "$1 ");
+const maskExp = (v: string) =>
+  onlyDigits(v).slice(0, 4).replace(/(\d{2})(\d)/, "$1/$2");
+const UF = [
+  "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR",
+  "PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO",
+];
+
 type CartItem = Product & { qty: number };
 
 type Coupon = {
@@ -230,6 +262,39 @@ function Index() {
   );
   const [toast, setToast] = useState<string | null>(null);
 
+  type CheckoutStep = "cart" | "address" | "payment" | "review";
+  const [step, setStep] = useState<CheckoutStep>("cart");
+  const [orderId, setOrderId] = useState<string | null>(null);
+  const [address, setAddress] = useState({
+    fullName: "",
+    cpf: "",
+    phone: "",
+    email: "",
+    cep: "",
+    street: "",
+    number: "",
+    complement: "",
+    district: "",
+    city: "",
+    state: "",
+  });
+  const [payment, setPayment] = useState<{
+    method: "card" | "pix" | "boleto";
+    cardNumber: string;
+    cardName: string;
+    cardExp: string;
+    cardCvv: string;
+    installments: number;
+  }>({
+    method: "card",
+    cardNumber: "",
+    cardName: "",
+    cardExp: "",
+    cardCvv: "",
+    installments: 1,
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
   const showToast = (text: string) => {
     setToast(text);
     window.setTimeout(() => setToast(null), 2000);
@@ -266,7 +331,42 @@ function Index() {
   }, [subtotal, coupon]);
 
   const discount = coupon ? (subtotal * coupon.percent) / 100 : 0;
-  const total = subtotal - discount;
+  const afterDiscount = subtotal - discount;
+  const shipping = payment.method === "pix" ? 0 : subtotal === 0 ? 0 : afterDiscount >= 300 ? 0 : 29.9;
+  const pixDiscount = payment.method === "pix" && subtotal > 0 ? afterDiscount * 0.05 : 0;
+  const total = afterDiscount + shipping - pixDiscount;
+
+  const maxInstallments = Math.min(12, Math.max(1, Math.floor(total / 50) || 1));
+  const installmentValue = total / payment.installments;
+
+  const validateAddress = () => {
+    const e: Record<string, string> = {};
+    if (address.fullName.trim().length < 3) e.fullName = "Informe seu nome completo.";
+    if (onlyDigits(address.cpf).length !== 11) e.cpf = "CPF inválido (11 dígitos).";
+    if (onlyDigits(address.phone).length < 10) e.phone = "Telefone inválido.";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address.email)) e.email = "E-mail inválido.";
+    if (onlyDigits(address.cep).length !== 8) e.cep = "CEP inválido.";
+    if (!address.street.trim()) e.street = "Informe a rua.";
+    if (!address.number.trim()) e.number = "Informe o número.";
+    if (!address.district.trim()) e.district = "Informe o bairro.";
+    if (!address.city.trim()) e.city = "Informe a cidade.";
+    if (!UF.includes(address.state)) e.state = "Selecione o estado.";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+  const validatePayment = () => {
+    const e: Record<string, string> = {};
+    if (payment.method === "card") {
+      if (onlyDigits(payment.cardNumber).length < 13) e.cardNumber = "Número do cartão inválido.";
+      if (payment.cardName.trim().length < 3) e.cardName = "Nome impresso no cartão.";
+      const [mm, yy] = payment.cardExp.split("/");
+      if (!mm || !yy || +mm < 1 || +mm > 12 || yy.length !== 2)
+        e.cardExp = "Validade inválida (MM/AA).";
+      if (onlyDigits(payment.cardCvv).length < 3) e.cardCvv = "CVV inválido.";
+    }
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
 
   const applyCoupon = (raw: string) => {
     const code = raw.trim().toUpperCase();
@@ -487,12 +587,73 @@ function Index() {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-5 space-y-3">
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              {/* Stepper — Nielsen: visibility of system status */}
+              {!purchased && cart.length > 0 && (
+                <ol
+                  className="flex items-center gap-1 text-[11px] uppercase tracking-wider"
+                  aria-label="Etapas do checkout"
+                >
+                  {(["cart", "address", "payment", "review"] as CheckoutStep[]).map((s, idx) => {
+                    const labels = { cart: "Sacola", address: "Endereço", payment: "Pagamento", review: "Revisão" };
+                    const order = ["cart", "address", "payment", "review"];
+                    const current = order.indexOf(step);
+                    const done = idx < current;
+                    const active = idx === current;
+                    return (
+                      <li key={s} className="flex-1 flex items-center gap-1">
+                        <span
+                          aria-current={active ? "step" : undefined}
+                          className={`flex-1 text-center py-1.5 rounded-full border ${
+                            active
+                              ? "bg-emerald-400/15 border-emerald-400/60 text-emerald-300 font-bold"
+                              : done
+                                ? "border-emerald-400/30 text-emerald-400/80"
+                                : "border-slate-700 text-slate-500"
+                          }`}
+                        >
+                          {idx + 1}. {labels[s]}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+
               {purchased ? (
-                <div role="status" className="text-center py-12">
+                <div role="status" className="text-center py-10">
                   <Sparkles className="w-12 h-12 neon-green mx-auto mb-3" aria-hidden="true" />
-                  <h3 className="font-display text-xl neon-green">Compra realizada!</h3>
+                  <h3 className="font-display text-xl neon-green">Pedido confirmado!</h3>
                   <p className="text-slate-400 mt-2">Obrigado pela preferência 🎮</p>
+                  {orderId && (
+                    <p className="text-xs text-slate-500 mt-3">
+                      Nº do pedido: <span className="text-emerald-400 font-mono">{orderId}</span>
+                    </p>
+                  )}
+                  <div className="mt-4 text-left text-sm bg-black/40 neon-border rounded-lg p-4 space-y-1">
+                    {payment.method === "pix" && (
+                      <p className="text-emerald-300">
+                        <QrCode className="w-4 h-4 inline mr-1" aria-hidden="true" />
+                        Use o QR Code enviado para {address.email} para concluir o PIX.
+                      </p>
+                    )}
+                    {payment.method === "boleto" && (
+                      <p className="text-emerald-300">
+                        <Barcode className="w-4 h-4 inline mr-1" aria-hidden="true" />
+                        O boleto foi enviado para {address.email}. Vencimento em 3 dias úteis.
+                      </p>
+                    )}
+                    {payment.method === "card" && (
+                      <p className="text-emerald-300">
+                        <CreditCard className="w-4 h-4 inline mr-1" aria-hidden="true" />
+                        Pagamento aprovado em {payment.installments}x de {brl(installmentValue)}.
+                      </p>
+                    )}
+                    <p className="text-slate-400 text-xs pt-2 flex items-start gap-1">
+                      <Truck className="w-3 h-3 mt-0.5" aria-hidden="true" />
+                      Entrega prevista em 5–8 dias úteis para {address.city}/{address.state}.
+                    </p>
+                  </div>
                 </div>
               ) : cart.length === 0 ? (
                 <div className="text-center mt-12">
@@ -505,158 +666,265 @@ function Index() {
                     Continuar comprando
                   </button>
                 </div>
-              ) : (
-                <ul className="space-y-3" aria-label="Itens do carrinho">
-                  {cart.map((i) => (
-                    <li
-                      key={i.id}
-                      className="flex gap-3 p-3 rounded-lg bg-black/40 neon-border"
-                    >
-                      <img
-                        src={i.image}
-                        alt=""
-                        className="w-16 h-16 rounded object-cover"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold truncate">{i.name}</p>
-                        <p className="text-emerald-400 text-sm">{brl(i.price)}</p>
-                        <div className="flex items-center gap-2 mt-1" role="group" aria-label={`Quantidade de ${i.name}`}>
-                          <button
-                            onClick={() => changeQty(i.id, -1)}
-                            className="p-2 rounded bg-emerald-400/10 hover:bg-emerald-400/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 min-h-11 min-w-11 flex items-center justify-center"
-                            aria-label={`Diminuir quantidade de ${i.name}`}
-                          >
-                            <Minus className="w-3 h-3" aria-hidden="true" />
-                          </button>
-                          <span className="text-sm w-6 text-center" aria-live="polite" aria-label={`${i.qty} unidades`}>
-                            {i.qty}
-                          </span>
-                          <button
-                            onClick={() => changeQty(i.id, 1)}
-                            className="p-2 rounded bg-emerald-400/10 hover:bg-emerald-400/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 min-h-11 min-w-11 flex items-center justify-center"
-                            aria-label={`Aumentar quantidade de ${i.name}`}
-                          >
-                            <Plus className="w-3 h-3" aria-hidden="true" />
-                          </button>
+              ) : step === "cart" ? (
+                <>
+                  <ul className="space-y-3" aria-label="Itens do carrinho">
+                    {cart.map((i) => (
+                      <li key={i.id} className="flex gap-3 p-3 rounded-lg bg-black/40 neon-border">
+                        <img src={i.image} alt="" className="w-16 h-16 rounded object-cover" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold truncate">{i.name}</p>
+                          <p className="text-emerald-400 text-sm">{brl(i.price)}</p>
+                          <div className="flex items-center gap-2 mt-1" role="group" aria-label={`Quantidade de ${i.name}`}>
+                            <button
+                              onClick={() => changeQty(i.id, -1)}
+                              className="p-2 rounded bg-emerald-400/10 hover:bg-emerald-400/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 min-h-11 min-w-11 flex items-center justify-center"
+                              aria-label={`Diminuir quantidade de ${i.name}`}
+                            >
+                              <Minus className="w-3 h-3" aria-hidden="true" />
+                            </button>
+                            <span className="text-sm w-6 text-center" aria-live="polite" aria-label={`${i.qty} unidades`}>
+                              {i.qty}
+                            </span>
+                            <button
+                              onClick={() => changeQty(i.id, 1)}
+                              className="p-2 rounded bg-emerald-400/10 hover:bg-emerald-400/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 min-h-11 min-w-11 flex items-center justify-center"
+                              aria-label={`Aumentar quantidade de ${i.name}`}
+                            >
+                              <Plus className="w-3 h-3" aria-hidden="true" />
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                      <button
-                        onClick={() => removeItem(i.id)}
-                        className="text-slate-500 hover:text-red-400 p-2 self-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 rounded min-h-11 min-w-11 flex items-center justify-center"
-                        aria-label={`Remover ${i.name} do carrinho`}
-                      >
-                        <Trash2 className="w-4 h-4" aria-hidden="true" />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
+                        <button
+                          onClick={() => removeItem(i.id)}
+                          className="text-slate-500 hover:text-red-400 p-2 self-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 rounded min-h-11 min-w-11 flex items-center justify-center"
+                          aria-label={`Remover ${i.name} do carrinho`}
+                        >
+                          <Trash2 className="w-4 h-4" aria-hidden="true" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
 
-              {/* DESCONTOS — Nielsen: recognition rather than recall */}
-              {!purchased && cart.length > 0 && (
-                <section
-                  aria-labelledby="coupon-title"
-                  className="mt-6 p-4 rounded-xl bg-black/40 neon-border"
+                  {/* DESCONTOS */}
+                  <section aria-labelledby="coupon-title" className="mt-4 p-4 rounded-xl bg-black/40 neon-border">
+                    <h3 id="coupon-title" className="font-display text-sm neon-green flex items-center gap-2 mb-3">
+                      <Tag className="w-4 h-4" aria-hidden="true" /> Cupom de desconto
+                    </h3>
+                    {coupon ? (
+                      <div className="flex items-center justify-between bg-emerald-400/10 border border-emerald-400/40 rounded-lg px-3 py-2">
+                        <div>
+                          <p className="text-emerald-300 font-semibold text-sm">{coupon.code} • {coupon.percent}% OFF</p>
+                          <p className="text-xs text-slate-400">{coupon.description}</p>
+                        </div>
+                        <button onClick={removeCoupon} className="text-xs text-slate-300 hover:text-red-400 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 rounded px-2 py-1">
+                          Remover
+                        </button>
+                      </div>
+                    ) : (
+                      <form onSubmit={(e) => { e.preventDefault(); applyCoupon(couponInput); }} className="flex gap-2">
+                        <label htmlFor="coupon-input" className="sr-only">Código do cupom</label>
+                        <input id="coupon-input" type="text" value={couponInput} onChange={(e) => setCouponInput(e.target.value)} placeholder="Digite o cupom" autoComplete="off" aria-describedby="coupon-help" className="flex-1 bg-black/50 border border-emerald-400/20 focus:border-emerald-400/60 focus:outline-none rounded-lg px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 uppercase" />
+                        <button type="submit" className="btn-green px-4 rounded-lg text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300">Aplicar</button>
+                      </form>
+                    )}
+                    {couponMsg && (
+                      <p role="status" className={`mt-2 text-xs flex items-center gap-1 ${couponMsg.kind === "ok" ? "text-emerald-400" : "text-red-400"}`}>
+                        {couponMsg.kind === "ok" ? <CheckCircle2 className="w-3 h-3" aria-hidden="true" /> : <AlertCircle className="w-3 h-3" aria-hidden="true" />}
+                        {couponMsg.text}
+                      </p>
+                    )}
+                    <p id="coupon-help" className="text-[11px] text-slate-500 mt-3 mb-2">Toque em um cupom para aplicar:</p>
+                    <ul className="flex flex-wrap gap-2">
+                      {COUPONS.map((c) => {
+                        const eligible = !c.minTotal || subtotal >= c.minTotal;
+                        const active = coupon?.code === c.code;
+                        return (
+                          <li key={c.code}>
+                            <button type="button" onClick={() => applyCoupon(c.code)} disabled={!eligible || active} aria-label={`Cupom ${c.code}, ${c.label}, ${c.description}${!eligible ? ", indisponível" : ""}`} className="text-xs px-3 py-1.5 rounded-full border border-emerald-400/30 text-emerald-300 hover:bg-emerald-400/15 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 transition">
+                              <span className="font-bold">{c.code}</span> <span className="text-slate-400">• {c.label}</span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </section>
+                </>
+              ) : step === "address" ? (
+                <form
+                  id="checkout-form"
+                  onSubmit={(e) => { e.preventDefault(); if (validateAddress()) { setErrors({}); setStep("payment"); } }}
+                  className="space-y-3"
+                  noValidate
                 >
-                  <h3
-                    id="coupon-title"
-                    className="font-display text-sm neon-green flex items-center gap-2 mb-3"
-                  >
-                    <Tag className="w-4 h-4" aria-hidden="true" /> Cupom de desconto
+                  <h3 className="font-display text-sm neon-green flex items-center gap-2">
+                    <MapPin className="w-4 h-4" aria-hidden="true" /> Dados de entrega
                   </h3>
-
-                  {coupon ? (
-                    <div className="flex items-center justify-between bg-emerald-400/10 border border-emerald-400/40 rounded-lg px-3 py-2">
-                      <div>
-                        <p className="text-emerald-300 font-semibold text-sm">
-                          {coupon.code} • {coupon.percent}% OFF
-                        </p>
-                        <p className="text-xs text-slate-400">{coupon.description}</p>
-                      </div>
-                      <button
-                        onClick={removeCoupon}
-                        className="text-xs text-slate-300 hover:text-red-400 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 rounded px-2 py-1"
-                      >
-                        Remover
-                      </button>
+                  <Field label="Nome completo" id="f-name" error={errors.fullName} value={address.fullName} onChange={(v) => setAddress({ ...address, fullName: v })} autoComplete="name" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="CPF" id="f-cpf" error={errors.cpf} value={address.cpf} onChange={(v) => setAddress({ ...address, cpf: maskCPF(v) })} inputMode="numeric" autoComplete="off" placeholder="000.000.000-00" />
+                    <Field label="Telefone" id="f-phone" error={errors.phone} value={address.phone} onChange={(v) => setAddress({ ...address, phone: maskPhone(v) })} inputMode="tel" autoComplete="tel" placeholder="(11) 99999-9999" />
+                  </div>
+                  <Field label="E-mail" id="f-email" type="email" error={errors.email} value={address.email} onChange={(v) => setAddress({ ...address, email: v })} autoComplete="email" placeholder="voce@email.com" />
+                  <div className="grid grid-cols-3 gap-3">
+                    <Field label="CEP" id="f-cep" error={errors.cep} value={address.cep} onChange={(v) => setAddress({ ...address, cep: maskCEP(v) })} inputMode="numeric" autoComplete="postal-code" placeholder="00000-000" />
+                    <div className="col-span-2">
+                      <Field label="Rua" id="f-street" error={errors.street} value={address.street} onChange={(v) => setAddress({ ...address, street: v })} autoComplete="address-line1" />
                     </div>
-                  ) : (
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        applyCoupon(couponInput);
-                      }}
-                      className="flex gap-2"
-                    >
-                      <label htmlFor="coupon-input" className="sr-only">
-                        Código do cupom
-                      </label>
-                      <input
-                        id="coupon-input"
-                        type="text"
-                        value={couponInput}
-                        onChange={(e) => setCouponInput(e.target.value)}
-                        placeholder="Digite o cupom"
-                        autoComplete="off"
-                        aria-describedby="coupon-help"
-                        className="flex-1 bg-black/50 border border-emerald-400/20 focus:border-emerald-400/60 focus:outline-none rounded-lg px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 uppercase"
-                      />
-                      <button
-                        type="submit"
-                        className="btn-green px-4 rounded-lg text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <Field label="Número" id="f-num" error={errors.number} value={address.number} onChange={(v) => setAddress({ ...address, number: v })} autoComplete="address-line2" />
+                    <div className="col-span-2">
+                      <Field label="Complemento (opcional)" id="f-comp" value={address.complement} onChange={(v) => setAddress({ ...address, complement: v })} />
+                    </div>
+                  </div>
+                  <Field label="Bairro" id="f-dist" error={errors.district} value={address.district} onChange={(v) => setAddress({ ...address, district: v })} />
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="col-span-2">
+                      <Field label="Cidade" id="f-city" error={errors.city} value={address.city} onChange={(v) => setAddress({ ...address, city: v })} autoComplete="address-level2" />
+                    </div>
+                    <div>
+                      <label htmlFor="f-state" className="block text-xs text-slate-400 mb-1">UF *</label>
+                      <select
+                        id="f-state"
+                        value={address.state}
+                        onChange={(e) => setAddress({ ...address, state: e.target.value })}
+                        aria-invalid={!!errors.state}
+                        aria-describedby={errors.state ? "f-state-err" : undefined}
+                        className="w-full bg-black/50 border border-emerald-400/20 focus:border-emerald-400/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 rounded-lg px-2 py-2 text-sm text-slate-100"
                       >
-                        Aplicar
-                      </button>
-                    </form>
-                  )}
-
-                  {couponMsg && (
-                    <p
-                      role="status"
-                      className={`mt-2 text-xs flex items-center gap-1 ${
-                        couponMsg.kind === "ok" ? "text-emerald-400" : "text-red-400"
-                      }`}
-                    >
-                      {couponMsg.kind === "ok" ? (
-                        <CheckCircle2 className="w-3 h-3" aria-hidden="true" />
-                      ) : (
-                        <AlertCircle className="w-3 h-3" aria-hidden="true" />
-                      )}
-                      {couponMsg.text}
-                    </p>
-                  )}
-
-                  <p id="coupon-help" className="text-[11px] text-slate-500 mt-3 mb-2">
-                    Toque em um cupom para aplicar:
-                  </p>
-                  <ul className="flex flex-wrap gap-2">
-                    {COUPONS.map((c) => {
-                      const eligible = !c.minTotal || subtotal >= c.minTotal;
-                      const active = coupon?.code === c.code;
+                        <option value="">—</option>
+                        {UF.map((u) => <option key={u} value={u}>{u}</option>)}
+                      </select>
+                      {errors.state && <p id="f-state-err" className="text-[11px] text-red-400 mt-1">{errors.state}</p>}
+                    </div>
+                  </div>
+                </form>
+              ) : step === "payment" ? (
+                <form
+                  id="checkout-form"
+                  onSubmit={(e) => { e.preventDefault(); if (validatePayment()) { setErrors({}); setStep("review"); } }}
+                  className="space-y-4"
+                  noValidate
+                >
+                  <h3 className="font-display text-sm neon-green flex items-center gap-2">
+                    <Lock className="w-4 h-4" aria-hidden="true" /> Forma de pagamento
+                  </h3>
+                  <fieldset className="space-y-2">
+                    <legend className="sr-only">Selecione o método de pagamento</legend>
+                    {([
+                      { id: "card", label: "Cartão de crédito", icon: CreditCard, hint: `Em até ${maxInstallments}x sem juros` },
+                      { id: "pix", label: "PIX", icon: QrCode, hint: "5% de desconto e aprovação na hora" },
+                      { id: "boleto", label: "Boleto bancário", icon: Barcode, hint: "Vence em 3 dias úteis" },
+                    ] as const).map((m) => {
+                      const active = payment.method === m.id;
+                      const Icon = m.icon;
                       return (
-                        <li key={c.code}>
-                          <button
-                            type="button"
-                            onClick={() => applyCoupon(c.code)}
-                            disabled={!eligible || active}
-                            aria-label={`Cupom ${c.code}, ${c.label}, ${c.description}${
-                              !eligible ? ", indisponível" : ""
-                            }`}
-                            className="text-xs px-3 py-1.5 rounded-full border border-emerald-400/30 text-emerald-300 hover:bg-emerald-400/15 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 transition"
-                          >
-                            <span className="font-bold">{c.code}</span>{" "}
-                            <span className="text-slate-400">• {c.label}</span>
-                          </button>
-                        </li>
+                        <label
+                          key={m.id}
+                          className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition ${active ? "border-emerald-400/70 bg-emerald-400/10" : "border-emerald-400/20 hover:border-emerald-400/40"}`}
+                        >
+                          <input
+                            type="radio"
+                            name="paymethod"
+                            value={m.id}
+                            checked={active}
+                            onChange={() => setPayment({ ...payment, method: m.id })}
+                            className="accent-emerald-400 w-4 h-4"
+                          />
+                          <Icon className="w-5 h-5 text-emerald-400" aria-hidden="true" />
+                          <span className="flex-1">
+                            <span className="block text-sm font-semibold">{m.label}</span>
+                            <span className="block text-xs text-slate-400">{m.hint}</span>
+                          </span>
+                        </label>
                       );
                     })}
-                  </ul>
-                </section>
+                  </fieldset>
+
+                  {payment.method === "card" && (
+                    <div className="space-y-3 pt-2">
+                      <Field label="Número do cartão" id="c-num" error={errors.cardNumber} value={payment.cardNumber} onChange={(v) => setPayment({ ...payment, cardNumber: maskCard(v) })} inputMode="numeric" autoComplete="cc-number" placeholder="0000 0000 0000 0000" />
+                      <Field label="Nome impresso no cartão" id="c-name" error={errors.cardName} value={payment.cardName} onChange={(v) => setPayment({ ...payment, cardName: v.toUpperCase() })} autoComplete="cc-name" placeholder="COMO ESTÁ NO CARTÃO" />
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="Validade" id="c-exp" error={errors.cardExp} value={payment.cardExp} onChange={(v) => setPayment({ ...payment, cardExp: maskExp(v) })} inputMode="numeric" autoComplete="cc-exp" placeholder="MM/AA" />
+                        <Field label="CVV" id="c-cvv" error={errors.cardCvv} value={payment.cardCvv} onChange={(v) => setPayment({ ...payment, cardCvv: onlyDigits(v).slice(0, 4) })} inputMode="numeric" autoComplete="cc-csc" placeholder="123" />
+                      </div>
+                      <div>
+                        <label htmlFor="c-inst" className="block text-xs text-slate-400 mb-1">Parcelas</label>
+                        <select
+                          id="c-inst"
+                          value={payment.installments}
+                          onChange={(e) => setPayment({ ...payment, installments: Number(e.target.value) })}
+                          className="w-full bg-black/50 border border-emerald-400/20 focus:border-emerald-400/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 rounded-lg px-2 py-2 text-sm text-slate-100"
+                        >
+                          {Array.from({ length: maxInstallments }, (_, i) => i + 1).map((n) => (
+                            <option key={n} value={n}>
+                              {n}x de {brl(total / n)} {n === 1 ? "à vista" : "sem juros"}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  <p className="text-[11px] text-slate-500 flex items-center gap-1">
+                    <Lock className="w-3 h-3" aria-hidden="true" /> Conexão segura. Seus dados são criptografados.
+                  </p>
+                </form>
+              ) : (
+                /* REVIEW */
+                <div className="space-y-3">
+                  <h3 className="font-display text-sm neon-green">Revise seu pedido</h3>
+
+                  <section className="p-3 rounded-lg bg-black/40 neon-border text-sm">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-semibold flex items-center gap-1 text-slate-200">
+                        <MapPin className="w-4 h-4 text-emerald-400" aria-hidden="true" /> Entrega
+                      </h4>
+                      <button onClick={() => setStep("address")} className="text-xs text-emerald-400 underline">Editar</button>
+                    </div>
+                    <p className="text-slate-300">{address.fullName} • {address.phone}</p>
+                    <p className="text-slate-400 text-xs">{address.email}</p>
+                    <p className="text-slate-400 text-xs mt-1">
+                      {address.street}, {address.number}{address.complement && ` — ${address.complement}`}<br />
+                      {address.district} — {address.city}/{address.state} • CEP {address.cep}
+                    </p>
+                  </section>
+
+                  <section className="p-3 rounded-lg bg-black/40 neon-border text-sm">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-semibold flex items-center gap-1 text-slate-200">
+                        <CreditCard className="w-4 h-4 text-emerald-400" aria-hidden="true" /> Pagamento
+                      </h4>
+                      <button onClick={() => setStep("payment")} className="text-xs text-emerald-400 underline">Editar</button>
+                    </div>
+                    {payment.method === "card" && (
+                      <p className="text-slate-300">
+                        Cartão final {onlyDigits(payment.cardNumber).slice(-4)} — {payment.installments}x de {brl(installmentValue)}
+                      </p>
+                    )}
+                    {payment.method === "pix" && <p className="text-slate-300">PIX (5% de desconto aplicado)</p>}
+                    {payment.method === "boleto" && <p className="text-slate-300">Boleto bancário</p>}
+                  </section>
+
+                  <section className="p-3 rounded-lg bg-black/40 neon-border text-sm">
+                    <h4 className="font-semibold text-slate-200 mb-2">Itens ({cartCount})</h4>
+                    <ul className="space-y-1 text-xs text-slate-400">
+                      {cart.map((i) => (
+                        <li key={i.id} className="flex justify-between gap-2">
+                          <span className="truncate">{i.qty}× {i.name}</span>
+                          <span>{brl(i.price * i.qty)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                </div>
               )}
             </div>
 
-            {!purchased && (
-              <div className="p-5 border-t border-emerald-400/15 space-y-2">
+            {!purchased && cart.length > 0 && (
+              <div className="p-5 border-t border-emerald-400/15 space-y-3">
                 <dl className="text-sm space-y-1">
                   <div className="flex justify-between text-slate-400">
                     <dt>Subtotal</dt>
@@ -668,27 +936,75 @@ function Index() {
                       <dd>− {brl(discount)}</dd>
                     </div>
                   )}
+                  {pixDiscount > 0 && (
+                    <div className="flex justify-between text-emerald-400">
+                      <dt>Desconto PIX (5%)</dt>
+                      <dd>− {brl(pixDiscount)}</dd>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-slate-400">
+                    <dt className="flex items-center gap-1"><Truck className="w-3 h-3" aria-hidden="true" /> Frete</dt>
+                    <dd>{shipping === 0 ? <span className="text-emerald-400">Grátis</span> : brl(shipping)}</dd>
+                  </div>
                   <div className="flex justify-between pt-2 border-t border-emerald-400/10">
                     <dt className="text-slate-300 font-semibold">Total</dt>
                     <dd className="font-display neon-green text-lg">{brl(total)}</dd>
                   </div>
                 </dl>
-                <button
-                  disabled={cart.length === 0}
-                  onClick={() => {
-                    setPurchased(true);
-                    setTimeout(() => {
-                      setPurchased(false);
-                      setCart([]);
-                      setCoupon(null);
-                      setCouponMsg(null);
-                      setCartOpen(false);
-                    }, 2200);
-                  }}
-                  className="btn-green w-full py-3 rounded-full disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 mt-2"
-                >
-                  Finalizar Compra
-                </button>
+
+                <div className="flex gap-2">
+                  {step !== "cart" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setErrors({});
+                        setStep(step === "address" ? "cart" : step === "payment" ? "address" : "payment");
+                      }}
+                      className="px-4 py-3 rounded-full border border-emerald-400/40 text-emerald-300 hover:bg-emerald-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 flex items-center gap-1"
+                      aria-label="Voltar para a etapa anterior"
+                    >
+                      <ArrowLeft className="w-4 h-4" aria-hidden="true" /> Voltar
+                    </button>
+                  )}
+                  {step === "review" ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const id = "PV-" + Math.random().toString(36).slice(2, 8).toUpperCase();
+                        setOrderId(id);
+                        setPurchased(true);
+                        setTimeout(() => {
+                          setPurchased(false);
+                          setCart([]);
+                          setCoupon(null);
+                          setCouponMsg(null);
+                          setStep("cart");
+                          setCartOpen(false);
+                          setOrderId(null);
+                        }, 3500);
+                      }}
+                      className="btn-green flex-1 py-3 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 flex items-center justify-center gap-2"
+                    >
+                      <Lock className="w-4 h-4" aria-hidden="true" /> Pagar {brl(total)}
+                    </button>
+                  ) : step === "cart" ? (
+                    <button
+                      type="button"
+                      onClick={() => setStep("address")}
+                      className="btn-green flex-1 py-3 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+                    >
+                      Ir para entrega
+                    </button>
+                  ) : (
+                    <button
+                      type="submit"
+                      form="checkout-form"
+                      className="btn-green flex-1 py-3 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+                    >
+                      {step === "address" ? "Ir para pagamento" : "Revisar pedido"}
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </aside>
@@ -697,6 +1013,55 @@ function Index() {
 
       {/* CHAT */}
       <ChatWidget open={chatOpen} setOpen={setChatOpen} />
+    </div>
+  );
+}
+
+function Field({
+  label,
+  id,
+  value,
+  onChange,
+  error,
+  type = "text",
+  placeholder,
+  inputMode,
+  autoComplete,
+}: {
+  label: string;
+  id: string;
+  value: string;
+  onChange: (v: string) => void;
+  error?: string;
+  type?: string;
+  placeholder?: string;
+  inputMode?: "text" | "numeric" | "tel" | "email" | "search" | "url" | "none" | "decimal";
+  autoComplete?: string;
+}) {
+  return (
+    <div>
+      <label htmlFor={id} className="block text-xs text-slate-400 mb-1">
+        {label}
+      </label>
+      <input
+        id={id}
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        inputMode={inputMode}
+        autoComplete={autoComplete}
+        aria-invalid={!!error}
+        aria-describedby={error ? `${id}-err` : undefined}
+        className={`w-full bg-black/50 border rounded-lg px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 ${
+          error ? "border-red-500/60" : "border-emerald-400/20 focus:border-emerald-400/60"
+        }`}
+      />
+      {error && (
+        <p id={`${id}-err`} className="text-[11px] text-red-400 mt-1 flex items-center gap-1">
+          <AlertCircle className="w-3 h-3" aria-hidden="true" /> {error}
+        </p>
+      )}
     </div>
   );
 }
