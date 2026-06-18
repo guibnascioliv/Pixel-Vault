@@ -1017,6 +1017,55 @@ function Index() {
   );
 }
 
+function Field({
+  label,
+  id,
+  value,
+  onChange,
+  error,
+  type = "text",
+  placeholder,
+  inputMode,
+  autoComplete,
+}: {
+  label: string;
+  id: string;
+  value: string;
+  onChange: (v: string) => void;
+  error?: string;
+  type?: string;
+  placeholder?: string;
+  inputMode?: "text" | "numeric" | "tel" | "email" | "search" | "url" | "none" | "decimal";
+  autoComplete?: string;
+}) {
+  return (
+    <div>
+      <label htmlFor={id} className="block text-xs text-slate-400 mb-1">
+        {label}
+      </label>
+      <input
+        id={id}
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        inputMode={inputMode}
+        autoComplete={autoComplete}
+        aria-invalid={!!error}
+        aria-describedby={error ? `${id}-err` : undefined}
+        className={`w-full bg-black/50 border rounded-lg px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 ${
+          error ? "border-red-500/60" : "border-emerald-400/20 focus:border-emerald-400/60"
+        }`}
+      />
+      {error && (
+        <p id={`${id}-err`} className="text-[11px] text-red-400 mt-1 flex items-center gap-1">
+          <AlertCircle className="w-3 h-3" aria-hidden="true" /> {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function Section({
   id,
   title,
