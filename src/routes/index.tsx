@@ -197,6 +197,31 @@ const consoles: Product[] = [
 const brl = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+const onlyDigits = (s: string) => s.replace(/\D/g, "");
+const maskCEP = (v: string) => onlyDigits(v).slice(0, 8).replace(/(\d{5})(\d)/, "$1-$2");
+const maskCPF = (v: string) =>
+  onlyDigits(v)
+    .slice(0, 11)
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+const maskPhone = (v: string) => {
+  const d = onlyDigits(v).slice(0, 11);
+  if (d.length <= 10)
+    return d.replace(/(\d{0,2})(\d{0,4})(\d{0,4}).*/, (_, a, b, c) =>
+      [a && `(${a}`, a && a.length === 2 ? ") " : "", b, c && `-${c}`].filter(Boolean).join(""),
+    );
+  return d.replace(/(\d{2})(\d{5})(\d{0,4}).*/, "($1) $2-$3");
+};
+const maskCard = (v: string) =>
+  onlyDigits(v).slice(0, 19).replace(/(\d{4})(?=\d)/g, "$1 ");
+const maskExp = (v: string) =>
+  onlyDigits(v).slice(0, 4).replace(/(\d{2})(\d)/, "$1/$2");
+const UF = [
+  "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR",
+  "PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO",
+];
+
 type CartItem = Product & { qty: number };
 
 type Coupon = {
