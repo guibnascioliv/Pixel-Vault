@@ -18,6 +18,13 @@ import {
   Tag,
   CheckCircle2,
   AlertCircle,
+  CreditCard,
+  QrCode,
+  Barcode,
+  Truck,
+  MapPin,
+  Lock,
+  ArrowLeft,
 } from "lucide-react";
 import switchImg from "@/assets/console-switch.jpg";
 import vortexImg from "@/assets/console-vortex.jpg";
