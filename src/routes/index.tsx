@@ -331,7 +331,42 @@ function Index() {
   }, [subtotal, coupon]);
 
   const discount = coupon ? (subtotal * coupon.percent) / 100 : 0;
-  const total = subtotal - discount;
+  const afterDiscount = subtotal - discount;
+  const shipping = payment.method === "pix" ? 0 : subtotal === 0 ? 0 : afterDiscount >= 300 ? 0 : 29.9;
+  const pixDiscount = payment.method === "pix" && subtotal > 0 ? afterDiscount * 0.05 : 0;
+  const total = afterDiscount + shipping - pixDiscount;
+
+  const maxInstallments = Math.min(12, Math.max(1, Math.floor(total / 50) || 1));
+  const installmentValue = total / payment.installments;
+
+  const validateAddress = () => {
+    const e: Record<string, string> = {};
+    if (address.fullName.trim().length < 3) e.fullName = "Informe seu nome completo.";
+    if (onlyDigits(address.cpf).length !== 11) e.cpf = "CPF inválido (11 dígitos).";
+    if (onlyDigits(address.phone).length < 10) e.phone = "Telefone inválido.";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address.email)) e.email = "E-mail inválido.";
+    if (onlyDigits(address.cep).length !== 8) e.cep = "CEP inválido.";
+    if (!address.street.trim()) e.street = "Informe a rua.";
+    if (!address.number.trim()) e.number = "Informe o número.";
+    if (!address.district.trim()) e.district = "Informe o bairro.";
+    if (!address.city.trim()) e.city = "Informe a cidade.";
+    if (!UF.includes(address.state)) e.state = "Selecione o estado.";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+  const validatePayment = () => {
+    const e: Record<string, string> = {};
+    if (payment.method === "card") {
+      if (onlyDigits(payment.cardNumber).length < 13) e.cardNumber = "Número do cartão inválido.";
+      if (payment.cardName.trim().length < 3) e.cardName = "Nome impresso no cartão.";
+      const [mm, yy] = payment.cardExp.split("/");
+      if (!mm || !yy || +mm < 1 || +mm > 12 || yy.length !== 2)
+        e.cardExp = "Validade inválida (MM/AA).";
+      if (onlyDigits(payment.cardCvv).length < 3) e.cardCvv = "CVV inválido.";
+    }
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
 
   const applyCoupon = (raw: string) => {
     const code = raw.trim().toUpperCase();
