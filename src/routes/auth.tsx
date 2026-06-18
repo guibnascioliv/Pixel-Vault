@@ -42,7 +42,7 @@ function AuthPage() {
           },
         });
         if (error) throw error;
-        setMsg({ type: "ok", text: "Cadastro realizado! Verifique seu e-mail para confirmar." });
+        setMsg({ type: "ok", text: "Cadastro realizado! Verifique seu e-mail para confirmar. Se não encontrar, olhe na caixa de spam." });
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
