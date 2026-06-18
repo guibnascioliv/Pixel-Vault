@@ -237,6 +237,39 @@ function Index() {
   );
   const [toast, setToast] = useState<string | null>(null);
 
+  type CheckoutStep = "cart" | "address" | "payment" | "review";
+  const [step, setStep] = useState<CheckoutStep>("cart");
+  const [orderId, setOrderId] = useState<string | null>(null);
+  const [address, setAddress] = useState({
+    fullName: "",
+    cpf: "",
+    phone: "",
+    email: "",
+    cep: "",
+    street: "",
+    number: "",
+    complement: "",
+    district: "",
+    city: "",
+    state: "",
+  });
+  const [payment, setPayment] = useState<{
+    method: "card" | "pix" | "boleto";
+    cardNumber: string;
+    cardName: string;
+    cardExp: string;
+    cardCvv: string;
+    installments: number;
+  }>({
+    method: "card",
+    cardNumber: "",
+    cardName: "",
+    cardExp: "",
+    cardCvv: "",
+    installments: 1,
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
   const showToast = (text: string) => {
     setToast(text);
     window.setTimeout(() => setToast(null), 2000);
